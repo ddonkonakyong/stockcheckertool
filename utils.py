@@ -261,3 +261,23 @@ def fetch_stock_news(ticker):
         print(f"Error fetching news for {ticker}: {e}")
         return []
 
+def fetch_analyst_ratings(ticker):
+    """
+    Fetches analyst recommendations and upgrades/downgrades.
+    """
+    rec_summary = None
+    upgrades = None
+    
+    try:
+        stock = yf.Ticker(ticker)
+        # Recommendations (Strong Buy, Buy, etc.) - DataFrame
+        rec_summary = stock.recommendations
+        
+        # Upgrades/Downgrades - DataFrame
+        upgrades = stock.upgrades_downgrades
+        
+    except Exception as e:
+        print(f"Error fetching ratings for {ticker}: {e}")
+        
+    return rec_summary, upgrades
+

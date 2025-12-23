@@ -1,6 +1,6 @@
 import streamlit as st
 import plotly.graph_objects as go
-from utils import fetch_stock_data, fetch_stock_info, calculate_indicators, calculate_dcf, calculate_wacc, fetch_stock_news
+from utils import fetch_stock_data, fetch_stock_info, calculate_indicators, calculate_dcf, calculate_wacc, fetch_stock_news, fetch_analyst_ratings
 from datetime import datetime
 
 def plot_chart(df, ticker):
@@ -63,6 +63,13 @@ def main():
                     st.session_state['news'] = news
                 except:
                     st.session_state['news'] = []
+                    
+                # Fetch Ratings (and cache it)
+                try:
+                    recs, upgrades = fetch_analyst_ratings(ticker)
+                    st.session_state['ratings'] = {'recs': recs, 'upgrades': upgrades}
+                except:
+                     st.session_state['ratings'] = None
             else:
                 st.error("Error fetching data. Please check the ticker symbol.")
 
@@ -107,7 +114,7 @@ def main():
             col3.metric("52 Week High", fmt_currency(high_52))
         
         # Navigation using Radio for persistence
-        view = st.radio("View", ["Charts", "Technical Analysis", "Valuation (DCF)", "Latest News"], horizontal=True, key="view_nav")
+        view = st.radio("View", ["Charts", "Technical Analysis", "Valuation (DCF)", "Latest News", "Analyst Ratings"], horizontal=True, key="view_nav")
 
         if view == "Charts":
             # Plot Chart
@@ -253,6 +260,54 @@ def main():
                                 st.write("No link available")
             else:
                 st.info("No news found for this ticker.")
+                
+        elif view == "Analyst Ratings":
+            st.subheader("Analyst Recommendations")
+            ratings = st.session_state.get('ratings')
+            
+            if ratings:
+                recs = ratings['recs']
+                upgrades = ratings['upgrades']
+                
+                # Plot Recommendations
+                if recs is not None and not recs.empty:
+                    # Depending on version of yfinance, structure might differ. 
+                    # 0.2.x typically returns a DF with period index and columns like 'strongBuy', 'buy', etc.
+                    # Or simple table. Let's inspect or just try to plot.
+                    
+                    st.write("### Consensus")
+                    # Transpose for easier reading if it's a wide DF
+                    # Usually recs has columns [period, strongBuy, buy, hold, sell, strongSell]
+                    try:
+                        # Clean up dataframe for display
+                        # If index is 0, 1, 2...
+                        if 'period' in recs.columns:
+                            recs = recs.set_index('period')
+                        
+                        # Plot Stacked Bar
+                        # We want the latest period (0m) usually
+                        st.bar_chart(recs.iloc[:, :5]) # Display first 5 numerical cols usually
+                        
+                        with st.expander("Show detailed data"):
+                             st.dataframe(recs)
+                    except Exception as e:
+                        st.warning(f"Could not visualize recommendations: {e}")
+                        st.dataframe(recs)
+                        
+                else:
+                    st.info("No recommendation summary data available.")
+                    
+                st.divider()
+                
+                st.subheader("Recent Upgrades & Downgrades")
+                if upgrades is not None and not upgrades.empty:
+                     # It's usually a big list, show the latest 10
+                     st.dataframe(upgrades.head(10))
+                else:
+                     st.info("No recent upgrades/downgrades found.")
+            else:
+                st.info("No ratings data found.")
 
 if __name__ == "__main__":
     main()
+
