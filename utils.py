@@ -40,7 +40,18 @@ def fetch_stock_info(ticker):
         except Exception as e:
             print(f"Error fetching latest price update: {e}")
 
-        # 2. Robust FCF Extraction
+        # 1. Update Price from History... (kept previous block above)
+        # ...
+
+        # 2. Update Shares from fast_info if missing (Crucial for DCF)
+        if 'sharesOutstanding' not in info or info['sharesOutstanding'] is None:
+             try:
+                 shares = stock.fast_info.get('shares')
+                 if shares:
+                     info['sharesOutstanding'] = shares
+             except Exception: pass
+
+        # 3. Robust FCF Extraction
         if 'freeCashFlow' not in info or info['freeCashFlow'] is None:
             try:
                 cf = stock.cashflow
@@ -65,27 +76,30 @@ def fetch_stock_info(ticker):
             except Exception as e:
                 print(f"Error extracting FCF from DataFrame: {e}")
                 
-        # 3. Robust Total Debt/Cash Extraction
+        # 4. Robust Total Debt/Cash Extraction
         if 'totalDebt' not in info or info['totalDebt'] is None:
              try:
+                 # Try key variations
+                 if 'totalDebt' in info: del info['totalDebt']
+                 
                  bs = stock.balance_sheet
-                 if not bs.empty and 'Total Debt' in bs.index:
-                      for col in bs.columns:
-                           val = bs.loc['Total Debt', col]
-                           if pd.notna(val):
-                                info['totalDebt'] = val
-                                break
+                 if not bs.empty:
+                      # Try specific keys in balance sheet
+                      if 'Total Debt' in bs.index:
+                           info['totalDebt'] = bs.loc['Total Debt'].iloc[0]
+                      elif 'Long Term Debt' in bs.index: # Fallback partial
+                           info['totalDebt'] = bs.loc['Long Term Debt'].iloc[0]
+                           
              except: pass
              
         if 'totalCash' not in info or info['totalCash'] is None:
              try:
                  bs = stock.balance_sheet
-                 if not bs.empty and 'Cash And Cash Equivalents' in bs.index:
-                      for col in bs.columns:
-                           val = bs.loc['Cash And Cash Equivalents', col]
-                           if pd.notna(val):
-                                info['totalCash'] = val
-                                break
+                 if not bs.empty:
+                      if 'Cash And Cash Equivalents' in bs.index:
+                           info['totalCash'] = bs.loc['Cash And Cash Equivalents'].iloc[0]
+                      elif 'Cash Cash Equivalents And Short Term Investments' in bs.index:
+                           info['totalCash'] = bs.loc['Cash Cash Equivalents And Short Term Investments'].iloc[0]
              except: pass
 
         return info
